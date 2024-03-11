@@ -1,34 +1,41 @@
-use serde::{Deserialize};
+use serde::Deserialize;
 
-#[derive(Deserialize)]
-pub struct RuntimeSettings {
-    width: u32,
-    height: u32,
-}
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Config {
-    runtime_settings: RuntimeSettings,
-    sim_settings: SimSettings,
+    pub window_config: WindowConfig,
+    pub sim_config: SimConfig,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct WindowConfig {
+    pub title: String,
+    pub size: [u32; 2],
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SimConfig {
+    pub desired_maximum_frame_latency: u32,
+    pub star_count: u32,
+    pub arm_count: u32,
+    pub galaxy_radius: f32,
+    pub spiralness: f32,
+    pub noise_scale: f32,
+}
+
+const CONFIG_DIR: &str = "./config/";
 
 impl Config {
-    pub fn default() -> Self {
-        Self {
-            runtime_settings: RuntimeSettings::default(),
-        }
-    }
+    pub fn get() -> Self {
+        let args: Vec<String> = std::env::args().collect();
 
-    pub fn new() -> Self {
-        let config = r#"
-        {
-            "window_settings": {
-                "width": 800,
-                "height": 600,
-                "title": "N-Body Simulation"
-            }
-        }
-        "#;
-        toml::from_str(config).unwrap_or(Config::default())
+        let config_path = CONFIG_DIR.to_string() + (if args.len() > 1 {
+            &args[1]
+        } else {
+            "default.toml"
+        });
+
+        let config_str = std::fs::read_to_string(config_path).expect("Failed to read config file");
+
+        toml::from_str(&config_str).expect("Failed to parse config file")
     }
 }
