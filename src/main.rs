@@ -10,8 +10,6 @@ use winit::{
 use config::Config;
 use wgpu_state::WgpuState;
 
-
-
 fn main() {
     // Logging configuration
     cfg_if::cfg_if! {
@@ -94,7 +92,8 @@ async fn run() -> Result<(), winit::error::EventLoopError> {
         Event::AboutToWait => {
             // Redraw
 
-            //app_state.update();
+            app_state.update();
+            
             match app_state.render() {
                 Ok(_) => {}
                 Err(e) => {

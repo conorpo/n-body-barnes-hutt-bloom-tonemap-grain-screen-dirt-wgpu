@@ -1,10 +1,12 @@
 use wgpu::core::device::queue;
+use wgpu::hal::auxil::db;
 use wgpu::RenderPipeline;
 
 use crate::config::Config;
 use crate::wgpu_state::{self, WgpuState};
 use wgpu::util::DeviceExt;
 use bytemuck::{Pod, Zeroable};
+use nalgebra::{Matrix4, Vector4};
 
 mod galaxy;
 use galaxy::Galaxy;
@@ -12,27 +14,48 @@ use galaxy::Galaxy;
 mod render;
 use render::Renderer;
 
+mod camera;
+use camera::{Camera, PerspectiveProjection, Projection};
+
 pub struct AppState<'window> {
     pub wgpu_state: WgpuState<'window>,
     pub galaxy: Galaxy,
     pub renderer: Renderer,
+    pub camera: Camera<PerspectiveProjection>,
 }
 
 impl<'window> AppState<'window> {
     pub fn new(wgpu_state: WgpuState<'window>, config: &Config) -> Self {
-        let galaxy = Galaxy::new();
+        let galaxy = Galaxy::new(&wgpu_state.device, config);
 
-        let renderer = Renderer::new(&wgpu_state.device, config, &galaxy, wgpu_state.config.format);
+        let camera = Camera::<PerspectiveProjection>::new(&wgpu_state.device);
+        
+        dbg!(camera.get_view_matrix());
+        dbg!(camera.projection.get_projection_matrix());
+
+        for i in 0..10 {
+            let star = galaxy.stars[i];
+            dbg!(star.position);
+
+
+            let homogenous = Vector4::new(star.position[0], star.position[1], star.position[2], 1.0);
+            let transformed = camera.projection.get_projection_matrix() *  camera.get_view_matrix() * homogenous;
+
+            dbg!(transformed);
+        }
+
+        let renderer = Renderer::new(&wgpu_state.device, config, &galaxy, wgpu_state.config.format, &camera);
 
         Self {
             wgpu_state,
             galaxy,
             renderer,
+            camera,
         }
     }   
 
     pub fn update(&self) {
-        todo!()
+        self.camera.update(&self.wgpu_state.queue);
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -58,7 +81,7 @@ impl<'window> AppState<'window> {
                 timestamp_writes: None,
             });
 
-            self.renderer.render(&mut render_pass);
+            self.renderer.render(&mut render_pass, &self.galaxy);
         }
 
         self.wgpu_state.queue.submit(std::iter::once(encoder.finish()));

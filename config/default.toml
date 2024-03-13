@@ -4,8 +4,8 @@ size = [800, 600]
 
 [sim_config]
 desired_maximum_frame_latency = 10
-star_count = 1000
+star_count = 10000
 arm_count = 4
 galaxy_radius = 1000
-spiralness = 0.1
-noise_scale = 2
+spiralness = 0.005
+noise_scale = 20

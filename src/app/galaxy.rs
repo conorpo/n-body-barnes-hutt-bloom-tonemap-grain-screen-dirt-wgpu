@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 use bytemuck::{Pod, Zeroable};
-use wgpu::core::device;
+use wgpu::{core::device, util::DeviceExt};
 
 //BHOT = Barnes-Hut Oct-Tree
 struct BHOTNode  {
@@ -16,24 +16,20 @@ struct BHOT {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
 pub struct Star {
-    position: [f32; 3],
+    pub position: [f32; 3],
 }
 
+#[derive(Debug)]
 pub struct Galaxy {
-    stars: Vec<Star>,
-    stars_buffer: wgpu::Buffer,
+    pub stars: Vec<Star>,
+    pub stars_buffer: wgpu::Buffer,
     //bhot: BHOT,
 }
 
 use rand::Rng;
 use rand_distr::StandardNormal;
-
-fn gaussian_random() -> f32 {
-    let mut rng = rand::thread_rng();
-    
-}
 
 impl Galaxy {
     pub fn new(device: &wgpu::Device, config: &crate::config::Config) -> Self {
@@ -44,23 +40,33 @@ impl Galaxy {
 
         for _ in 0..star_count {
             let arm: u32 = rng.gen::<u32>() % config.sim_config.arm_count;
-            let r = rng.gen::<f32>() * config.sim_config.galaxy_radius;
             let _starting_theta = ((arm as f32) / (config.sim_config.arm_count as f32)) * 2.0 * std::f32::consts::PI;
-            let theta = _starting_theta + r * config.sim_config.spiralness;
+
+            let spiralness_diff: f32 = rng.sample(StandardNormal);
+            let r: f32 = rng.gen::<f32>() * config.sim_config.galaxy_radius;
+            let theta: f32 = _starting_theta + r * (config.sim_config.spiralness + spiralness_diff * 0.0005);
 
             let random_offset: (f32, f32, f32) = (rng.sample(StandardNormal), rng.sample(StandardNormal), rng.sample(StandardNormal));
 
-            
             let x = r * theta.cos() + random_offset.0 * config.sim_config.noise_scale;
-            let y = r * theta.sin() + random_offset.1 * config.sim_config.noise_scale;
-            let z = random_offset.2 * config.sim_config.noise_scale;
+            let y = 0.0;// random_offset.1 * config.sim_config.noise_scale;
+            let z = r * theta.sin()  + random_offset.2 * config.sim_config.noise_scale;
 
             stars.push(Star {
                 position: [x, y, z],
             });
         }
 
-        todo!()
+        let stars_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Stars Buffer"),
+            contents: bytemuck::cast_slice(&stars),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        Self {
+            stars,
+            stars_buffer,
+        }
     }
 }
 
@@ -71,7 +77,7 @@ impl Star {
 
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<Star>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &Self::ATTRIBS,
         }
