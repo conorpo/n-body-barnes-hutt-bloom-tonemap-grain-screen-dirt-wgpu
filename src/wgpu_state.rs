@@ -23,7 +23,7 @@ impl<'window> WgpuState<'window> {
         // navgiator.gpu in WebGPU
         let instance = wgpu::Instance::new(
             wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::all(),
+                backends: wgpu::Backends::PRIMARY,
                 ..Default::default()
             }
         );
@@ -88,13 +88,5 @@ impl<'window> WgpuState<'window> {
         }
 
         dbg!(self.size);
-    }
-
-    pub fn input(&mut self, event: &WindowEvent) -> bool {
-        if let WindowEvent::MouseInput {state, button,  ..} = event {
-            dbg!(state, button);
-        }
-
-        false
     }
 }

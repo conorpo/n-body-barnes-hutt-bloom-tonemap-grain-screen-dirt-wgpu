@@ -1,5 +1,7 @@
-use nalgebra::{Const, Matrix4, Vector3};
+use nalgebra::{Const, Matrix4, OPoint, Vector3};
 use bytemuck::{Pod, Zeroable};
+
+use crate::config::Config;
 
 pub struct PerspectiveProjection {
     fov: f32,
@@ -25,7 +27,7 @@ impl Default for PerspectiveProjection {
             fov: 45.0,
             aspect_ratio: 1.0,
             near: 0.1,
-            far: 2000.0,
+            far: 3000.0,
         }
     }
 }
@@ -42,9 +44,28 @@ impl Projection for PerspectiveProjection {
 }
 
 pub struct Camera<T: Projection + Default> {
-    pub position: [f32; 3],    
+    pub spherical_position: SphericalCoordinate,   
     pub projection: T,
     camera_uniform: wgpu::Buffer,
+    pub orbit_speed: f32,
+    pub zoom_speed: f32,
+
+}
+
+pub struct SphericalCoordinate {
+    pub r: f32,
+    pub theta: f32,
+    pub phi: f32,
+}
+
+impl SphericalCoordinate {
+    pub fn to_cartesian(&self) -> OPoint<f32, Const<3>> {
+        nalgebra::Point3::new(
+            self.r * self.phi.sin() * self.theta.cos(),
+            self.r * self.phi.cos(),
+            self.r * self.phi.sin() * self.theta.sin(),
+        )
+    }
 }
 
 #[repr(C)]
@@ -55,7 +76,7 @@ struct CameraUniform {
 }
 
 impl<T: Projection + Default> Camera<T> {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, config: &Config) -> Self {
         let camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Camera Uniform"),
             size: std::mem::size_of::<CameraUniform>() as u64,
@@ -63,15 +84,23 @@ impl<T: Projection + Default> Camera<T> {
             mapped_at_creation: false,
         });
 
+        let spherical_position = SphericalCoordinate {
+            r: 500.0,
+            theta: 0.0,
+            phi: 20.0,
+        };
+
         Self {
-            position: [0.0, -500.0, -500.0],
+            spherical_position,
             projection: T::default(),
             camera_uniform,
+            orbit_speed: config.sim_config.orbit_speed,
+            zoom_speed: config.sim_config.zoom_speed,
         }
     }
 
     pub fn get_view_matrix(&self) -> Matrix4<f32> {
-        let eye = nalgebra::Point3::new(self.position[0], self.position[1], self.position[2]);
+        let eye = self.spherical_position.to_cartesian();
         let center = nalgebra::Point3::new(0.0, 0.0, 0.0);
         let up = Vector3::new(0.0, -1.0, 0.0);
         Matrix4::look_at_rh(&eye, &center, &up)
@@ -106,5 +135,17 @@ impl<T: Projection + Default> Camera<T> {
             },
             count: None,
         }
+    }
+
+    pub fn orbit_horizontal(&mut self, d_theta: f32) {
+        self.spherical_position.theta += d_theta;
+    }
+
+    pub fn orbit_vertical(&mut self, d_phi: f32) {
+        self.spherical_position.phi += d_phi;
+    }
+
+    pub fn zoom(&mut self, d_r: f32) {
+        self.spherical_position.r += d_r;
     }
 }

@@ -1,10 +1,11 @@
 mod config;
 mod wgpu_state;
 mod app;
+mod ui;
 
 use wgpu::hal::auxil::db;
 use winit::{
-    event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{PhysicalKey, KeyCode}, window::{WindowBuilder, Window}
+    event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{self, KeyCode, PhysicalKey}, window::{Window, WindowBuilder}
 };
 
 use config::Config;
@@ -66,12 +67,12 @@ async fn run() -> Result<(), winit::error::EventLoopError> {
     }
 
     // Setups the entire rest of the application
-    let mut app_state = app::AppState::new(wgpu_state, &config);
+    let mut app = app::AppState::new(wgpu_state, &config, &size);
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
     event_loop.run(move |event, elwt| match event {
-        Event::WindowEvent { ref event, window_id } if window_id == app_state.wgpu_state.window.id() => match event {
+        Event::WindowEvent { ref event, window_id } if window_id == app.wgpu_state.window.id() => match event {
             WindowEvent::CloseRequested | 
             WindowEvent::KeyboardInput { 
                 event: KeyEvent {
@@ -81,27 +82,29 @@ async fn run() -> Result<(), winit::error::EventLoopError> {
                 },
                 ..
             } => elwt.exit(),
+            WindowEvent::KeyboardInput { event, .. } => app.keyboard_input(event),
+            
             WindowEvent::Resized(physical_size) => {
-                app_state.wgpu_state.resize(*physical_size);
+                app.wgpu_state.resize(*physical_size);
             },
-            WindowEvent::MouseInput {..} => {
-                app_state.wgpu_state.input(event);
-            }
+            WindowEvent::MouseWheel { delta, phase, .. } => {
+                app.mouse_wheel_input(delta, phase);
+            },
             _ => {}
         },
         Event::AboutToWait => {
             // Redraw
 
-            app_state.update();
+            app.update();
             
-            match app_state.render() {
+            match app.render() {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("render error: {}", e);
                 }
             }
 
-            app_state.wgpu_state.window.request_redraw();
+            app.wgpu_state.window.request_redraw();
         },
         _ => {}
     })

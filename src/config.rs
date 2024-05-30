@@ -20,6 +20,8 @@ pub struct SimConfig {
     pub galaxy_radius: f32,
     pub spiralness: f32,
     pub noise_scale: f32,
+    pub orbit_speed: f32,
+    pub zoom_speed: f32,
 }
 
 const CONFIG_DIR: &str = "./config/";
