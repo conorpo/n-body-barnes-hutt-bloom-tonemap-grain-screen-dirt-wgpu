@@ -65,7 +65,7 @@ impl Galaxy {
 
         Self {
             stars,
-            stars_buffer,
+            stars_buffer: stars_buffer,
         }
     }
 }

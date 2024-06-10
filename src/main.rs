@@ -5,7 +5,7 @@ mod ui;
 
 use wgpu::hal::auxil::db;
 use winit::{
-    event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{self, KeyCode, PhysicalKey}, window::{Window, WindowBuilder}
+    event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{self, KeyCode, PhysicalKey}, window::{Theme, Window, WindowBuilder}
 };
 
 use config::Config;
@@ -40,8 +40,10 @@ async fn run() -> Result<(), winit::error::EventLoopError> {
     );
 
     let event_loop = EventLoop::new().ok().unwrap();
+    //let icon = Icon:
     let window = WindowBuilder::new()
         .with_inner_size(size)
+        .with_theme(Some(Theme::Dark))
         .with_title(config.window_config.title.clone())
         .build(&event_loop)
         .unwrap();
@@ -85,7 +87,7 @@ async fn run() -> Result<(), winit::error::EventLoopError> {
             WindowEvent::KeyboardInput { event, .. } => app.keyboard_input(event),
             
             WindowEvent::Resized(physical_size) => {
-                app.wgpu_state.resize(*physical_size);
+                app.resize(physical_size);
             },
             WindowEvent::MouseWheel { delta, phase, .. } => {
                 app.mouse_wheel_input(delta, phase);

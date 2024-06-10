@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 use wgpu::{hal::auxil::db, TextureFormat};
 use crate::config::Config;
 use winit::{
-    event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{PhysicalKey, KeyCode}, window::{WindowBuilder, Window}
+    dpi::PhysicalSize, event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowBuilder}
 };
 
 pub struct WgpuState<'window> {
@@ -12,7 +12,6 @@ pub struct WgpuState<'window> {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
     pub window: &'window Window,
 }
 
@@ -75,18 +74,14 @@ impl<'window> WgpuState<'window> {
             device,
             queue,
             config,
-            size,
         }        
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: &PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
         }
-
-        dbg!(self.size);
     }
 }

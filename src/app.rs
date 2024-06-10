@@ -1,13 +1,11 @@
-use wgpu::core::device::queue;
-use wgpu::hal::auxil::db;
-use wgpu::RenderPipeline;
+use egui_wgpu::ScreenDescriptor;
+use hal::auxil::db;
+use wgpu::*;
 use winit::dpi::PhysicalSize;
 use winit::event::KeyEvent;
 
 use crate::config::Config;
 use crate::wgpu_state::{self, WgpuState};
-use wgpu::util::DeviceExt;
-use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix4, Vector4};
 
 mod galaxy;
@@ -20,42 +18,49 @@ mod camera;
 use camera::{Camera, PerspectiveProjection, Projection};
 
 mod post_processing;
-use post_processing::bloom;
+use post_processing::bloom::Bloom;
+use post_processing::present::Present;
+
+use crate::ui::UI;
+
 
 pub struct AppState<'window> {
     pub wgpu_state: WgpuState<'window>,
     pub galaxy: Galaxy,
     pub renderer: Renderer,
     pub camera: Camera<PerspectiveProjection>,
+
+    // Post processing
+    pub bloom: Bloom,
+    pub present: Present,
+
+    //UI
+    pub ui: UI,
 }
 
 impl<'window> AppState<'window> {
     pub fn new(wgpu_state: WgpuState<'window>, config: &Config, size: &PhysicalSize<u32>) -> Self {
+        // Simulation
         let galaxy = Galaxy::new(&wgpu_state.device, config);
 
+        // Primary Rendering
         let camera = Camera::<PerspectiveProjection>::new(&wgpu_state.device, config);
-        
-        dbg!(camera.get_view_matrix());
-        dbg!(camera.projection.get_projection_matrix());
+        let renderer = Renderer::new(&wgpu_state.device, config, wgpu_state.config.format, &camera);
 
-        for i in 0..10 {
-            let star = galaxy.stars[i];
-            dbg!(star.position);
+        // Post-Porcessing
+        let bloom = Bloom::new(&wgpu_state.device, config, wgpu_state.config.format, size);
+        let present = Present::new(&wgpu_state.device, config, wgpu_state.config.format, size, &bloom.mipchain_views[0]);
 
-
-            let homogenous = Vector4::new(star.position[0], star.position[1], star.position[2], 1.0);
-            let transformed = camera.projection.get_projection_matrix() *  camera.get_view_matrix() * homogenous;
-
-            dbg!(transformed);
-        }
-
-        let renderer = Renderer::new(&wgpu_state.device, config, &galaxy, wgpu_state.config.format, &camera, size);
+        let ui = UI::new(&wgpu_state.device, wgpu_state.config.format, &wgpu_state.window);
 
         Self {
             wgpu_state,
             galaxy,
             renderer,
             camera,
+            bloom,
+            present,
+            ui
         }
     }   
 
@@ -67,38 +72,62 @@ impl<'window> AppState<'window> {
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.wgpu_state.surface.get_current_texture()?;
 
-        let view = &self.renderer.post_processing_textures[0].create_view(&wgpu::TextureViewDescriptor::default())
-
+        
         let mut encoder = self.wgpu_state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
+        
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: view,
+                    view: &self.bloom.mipchain_views[0],
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     }
-                })],
+                })], 
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                });
+
+            self.renderer.render(&mut render_pass, &self.galaxy);
+            }
+
+        // Bloom
+        self.bloom.render(&mut encoder, &self.wgpu_state.queue);
+
+        //Present
+        {
+            let output_view = output.texture.create_view(&TextureViewDescriptor::default());//&self.bloom.mipchain_views[0];
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    }
+                })], 
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
 
-            self.renderer.render(&mut render_pass, &self.galaxy);
+            self.present.render(&mut render_pass);
         }
 
-        // Main Image rendered to post_processing_ping
+        //UI
+        let size: [u32;2] = self.wgpu_state.window.inner_size().into();
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: size,
+            pixels_per_point: 1.0,
+        };
 
-        // Bloom
+        //self.ui.render(&mut encoder, &self.wgpu_state.window, screen_descriptor);
 
-        // Downsampling
-        for i in 0..bloom::MIP_LEVELS {
-            
-        }
-
+        
         self.wgpu_state.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
@@ -140,5 +169,12 @@ impl<'window> AppState<'window> {
             },
             _ => {}
         }
+    }
+
+    pub fn resize(&mut self, new_size: &PhysicalSize<u32>) {
+        self.wgpu_state.resize(new_size);
+        self.bloom.recreate_mipchain_and_bindgroups(&self.wgpu_state.device, self.wgpu_state.config.format, new_size);
+        //Recreate bindgroup which depends on the mipchain
+        self.present.recreate_bindgroup(&self.wgpu_state.device, &self.bloom.mipchain_views[0])
     }
 }

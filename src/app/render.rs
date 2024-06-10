@@ -1,6 +1,5 @@
 use super::camera::{Camera, Projection};
 use super::galaxy::{Galaxy, Star};
-use super::bloom::*;
 
 use crate::config::Config;
 use crate::wgpu_state::WgpuState;
@@ -10,13 +9,11 @@ use winit::dpi::PhysicalSize;
 pub struct Renderer {
     pub render_pipeline: wgpu::RenderPipeline,
     pub bindgroup: wgpu::BindGroup,
-    
-    // Bloom
-    pub bloom: Bloom
+
 }
 
 impl Renderer {
-    pub fn new<T: Projection + Default>(device: &Device, config: &Config, galaxy: &Galaxy, format: TextureFormat, camera: &Camera<T>, size: &PhysicalSize<u32>) -> Self {
+    pub fn new<T: Projection + Default>(device: &Device, _config: &Config, format: TextureFormat, camera: &Camera<T>) -> Self {
         let shader = device.create_shader_module(include_wgsl!("./shaders/render.wgsl"));
 
         let bindgroup_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -88,14 +85,10 @@ impl Renderer {
 
             (Maybe just have 2 and ping pong)
         */
-        
-        // Have to recreate this on resize
-        let bloom = Bloom::new(device, config, format, size);
 
         Self {
             render_pipeline,
-            bindgroup,
-            bloom
+            bindgroup
         }
     }
 
