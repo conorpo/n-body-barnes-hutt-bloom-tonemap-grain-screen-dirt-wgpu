@@ -1,7 +1,7 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use wgpu::{hal::auxil::db, TextureFormat};
+use wgpu::{core::device::queue, hal::auxil::db, TextureFormat};
 use crate::config::Config;
 use winit::{
     dpi::PhysicalSize, event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowBuilder}
@@ -39,14 +39,27 @@ impl<'window> WgpuState<'window> {
         ).await.unwrap();
 
 
-        let (device, queue) = adapter.request_device(
+        let request_device_result = adapter.request_device(
             &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
+                required_features: wgpu::Features::TIMESTAMP_QUERY,
                 required_limits: wgpu::Limits::default(),
                 label: None,
             },
             None,
-        ).await.unwrap();
+        ).await;
+
+        // Handles Timestamps not being enabled
+        let (device, queue) = match request_device_result {
+            Ok(device_queue) => device_queue,
+            Err(err) => {
+                dbg!(err);
+                adapter.request_device(&wgpu::DeviceDescriptor {
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                    label: None,
+                }, None).await.unwrap()
+            }
+        };
 
         let surface_caps = surface.get_capabilities(&adapter);
 

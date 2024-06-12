@@ -74,39 +74,45 @@ async fn run() -> Result<(), winit::error::EventLoopError> {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     event_loop.run(move |event, elwt| match event {
-        Event::WindowEvent { ref event, window_id } if window_id == app.wgpu_state.window.id() => match event {
-            WindowEvent::CloseRequested | 
-            WindowEvent::KeyboardInput { 
-                event: KeyEvent {
-                    state: ElementState::Pressed,
-                    physical_key: PhysicalKey::Code(KeyCode::Escape),
+        Event::WindowEvent { ref event, window_id } if window_id == app.wgpu_state.window.id() => {
+            app.wgpu_state.window.request_redraw();
+            match event {
+                WindowEvent::CloseRequested | 
+                WindowEvent::KeyboardInput { 
+                    event: KeyEvent {
+                        state: ElementState::Pressed,
+                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                        ..
+                    },
                     ..
+                } => elwt.exit(),
+                WindowEvent::KeyboardInput { event, .. } => app.keyboard_input(event),
+                
+                WindowEvent::Resized(physical_size) => {
+                    app.resize(physical_size);
                 },
-                ..
-            } => elwt.exit(),
-            WindowEvent::KeyboardInput { event, .. } => app.keyboard_input(event),
+                WindowEvent::MouseWheel { delta, phase, .. } => {
+                    app.mouse_wheel_input(delta, phase);
+                },
+                WindowEvent::RedrawRequested => {
+                    app.update();
             
-            WindowEvent::Resized(physical_size) => {
-                app.resize(physical_size);
-            },
-            WindowEvent::MouseWheel { delta, phase, .. } => {
-                app.mouse_wheel_input(delta, phase);
-            },
-            _ => {}
+                    match app.render() {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("render error: {}", e);
+                        }
+                    }
+                    },
+                    _ => {}
+            }  
+            app.ui.handle_input(app.wgpu_state.window, event);  
         },
         Event::AboutToWait => {
             // Redraw
 
-            app.update();
-            
-            match app.render() {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("render error: {}", e);
-                }
-            }
 
-            app.wgpu_state.window.request_redraw();
+            //app.wgpu_state.window.request_redraw();
         },
         _ => {}
     })

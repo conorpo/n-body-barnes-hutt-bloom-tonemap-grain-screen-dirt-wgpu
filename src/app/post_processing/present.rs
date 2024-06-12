@@ -87,9 +87,11 @@ impl Present {
     }
 
     pub fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>) {
+        rpass.push_debug_group("Present Render Pass");
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bindgroup, &[]);
         rpass.draw(0..6, 0..1);
+        rpass.pop_debug_group();
     }
 
     pub fn recreate_bindgroup(&mut self, device: &Device, texture_view: &TextureView) {

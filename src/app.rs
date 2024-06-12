@@ -1,12 +1,17 @@
+use std::time;
+
 use egui_wgpu::ScreenDescriptor;
+use env_logger::fmt::Timestamp;
 use hal::auxil::db;
 use wgpu::*;
 use winit::dpi::PhysicalSize;
 use winit::event::KeyEvent;
+use bytemuck;
+use nalgebra::{Matrix4, Vector4};
 
 use crate::config::Config;
 use crate::wgpu_state::{self, WgpuState};
-use nalgebra::{Matrix4, Vector4};
+use crate::ui::UI;
 
 mod galaxy;
 use galaxy::Galaxy;
@@ -14,14 +19,15 @@ use galaxy::Galaxy;
 mod render;
 use render::Renderer;
 
-mod camera;
+pub mod camera;
 use camera::{Camera, PerspectiveProjection, Projection};
 
-mod post_processing;
+pub mod post_processing;
 use post_processing::bloom::Bloom;
 use post_processing::present::Present;
 
-use crate::ui::UI;
+pub mod timestamps;
+use timestamps::Timestamps;
 
 
 pub struct AppState<'window> {
@@ -36,9 +42,13 @@ pub struct AppState<'window> {
 
     //UI
     pub ui: UI,
+
+    //Profiling
+    timestamps: Timestamps
 }
 
 impl<'window> AppState<'window> {
+    
     pub fn new(wgpu_state: WgpuState<'window>, config: &Config, size: &PhysicalSize<u32>) -> Self {
         // Simulation
         let galaxy = Galaxy::new(&wgpu_state.device, config);
@@ -52,6 +62,7 @@ impl<'window> AppState<'window> {
         let present = Present::new(&wgpu_state.device, config, wgpu_state.config.format, size, &bloom.mipchain_views[0]);
 
         let ui = UI::new(&wgpu_state.device, wgpu_state.config.format, &wgpu_state.window);
+        let timestamps = Timestamps::new(&wgpu_state.device);
 
         Self {
             wgpu_state,
@@ -60,7 +71,8 @@ impl<'window> AppState<'window> {
             camera,
             bloom,
             present,
-            ui
+            ui,
+            timestamps,
         }
     }   
 
@@ -88,18 +100,23 @@ impl<'window> AppState<'window> {
                 })], 
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
-                timestamp_writes: None,
-                });
+                timestamp_writes: Some(RenderPassTimestampWrites {
+                    query_set: &self.timestamps.query_set,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: Some(1)
+                }),
+            });
 
+            
             self.renderer.render(&mut render_pass, &self.galaxy);
-            }
+        }
 
         // Bloom
         self.bloom.render(&mut encoder, &self.wgpu_state.queue);
 
         //Present
+        let output_view = output.texture.create_view(&TextureViewDescriptor::default());//&self.bloom.mipchain_views[0];
         {
-            let output_view = output.texture.create_view(&TextureViewDescriptor::default());//&self.bloom.mipchain_views[0];
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -112,24 +129,34 @@ impl<'window> AppState<'window> {
                 })], 
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
-                timestamp_writes: None,
+                timestamp_writes: Some(RenderPassTimestampWrites {
+                    query_set: &self.timestamps.query_set,
+                    beginning_of_pass_write_index: Some(2),
+                    end_of_pass_write_index: Some(3)
+                }),
             });
 
             self.present.render(&mut render_pass);
         }
 
-        //UI
+        //UI (maybe figure out some abtraction instead of passing all used structs, maybe just pass the specific parameters)
+        let ui_output = self.ui.update(&self.wgpu_state, &mut self.camera, &mut self.bloom, & self.timestamps.last_frame_times);
+
         let size: [u32;2] = self.wgpu_state.window.inner_size().into();
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: size,
             pixels_per_point: 1.0,
         };
-
-        //self.ui.render(&mut encoder, &self.wgpu_state.window, screen_descriptor);
+        self.ui.render(&mut encoder, &self.wgpu_state, screen_descriptor, &output_view, ui_output);
 
         
+        //Profiling
+        self.timestamps.resolve(&mut encoder);
+
         self.wgpu_state.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+
+        self.timestamps.update_times(&mut self.wgpu_state.device);
 
         Ok(())
     }

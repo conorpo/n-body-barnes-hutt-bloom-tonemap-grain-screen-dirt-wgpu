@@ -1,0 +1,13 @@
+[window_config]
+title = "n-body-barnes-hutt-bloom-tonemap-grain-screen-dirt-wgpu"
+size = [800, 600]
+
+[sim_config]
+desired_maximum_frame_latency = 10
+star_count = 200000
+arm_count = 8
+galaxy_radius = 1000
+spiralness = 0.005
+noise_scale = 15
+orbit_speed = 0.1
+zoom_speed = 10.0

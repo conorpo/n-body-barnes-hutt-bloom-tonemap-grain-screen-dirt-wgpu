@@ -27,7 +27,7 @@ impl Default for PerspectiveProjection {
             fov: 45.0,
             aspect_ratio: 1.0,
             near: 0.1,
-            far: 3000.0,
+            far: 10000.0,
         }
     }
 }
@@ -147,5 +147,6 @@ impl<T: Projection + Default> Camera<T> {
 
     pub fn zoom(&mut self, d_r: f32) {
         self.spherical_position.r += d_r;
+        self.spherical_position.r = self.spherical_position.r.max(5.0);
     }
 }

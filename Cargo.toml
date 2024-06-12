@@ -11,16 +11,19 @@ env_logger = "0.11.2"
 log = "0.4.21"
 pollster = "0.3.0"
 nalgebra = "0.32.4"
+winit = {version = "0.29.15", features = ["rwh_06"]}
 wgpu = "*"
-winit = "0.29.10"
 serde = {version = "*", features = ["derive"]}
 toml = "0.8.10"
-bytemuck = {version = "*", features = ["derive"]}
+bytemuck = "*"
 rand_distr = "0.4.3"
 rand = "0.8.5"
-egui-wgpu = "0.26.2"
+
+# GUI
 egui = "0.27.2"
+egui-wgpu = "0.27.2"
 egui-winit = "0.27.2"
+
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wgpu = { version = "0.19.2", features = ["webgpu"] }

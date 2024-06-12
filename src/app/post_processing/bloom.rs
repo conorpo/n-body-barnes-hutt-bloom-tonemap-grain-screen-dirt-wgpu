@@ -27,6 +27,9 @@ pub struct Bloom {
     upsample_pipeline: wgpu::RenderPipeline,
     upsample_settings: wgpu::Buffer,
     upsample_settings_bindgroup: wgpu::BindGroup,
+
+    // Settings
+    pub filter_size: f32,
 }
 
 impl Bloom {
@@ -204,7 +207,9 @@ impl Bloom {
 
             upsample_pipeline: upsample_pipeline,
             upsample_settings_bindgroup: upsample_settings_bindgroup,
-            upsample_settings: upsample_settings
+            upsample_settings: upsample_settings,
+
+            filter_size: 0.001
         }
     }
 
@@ -269,6 +274,7 @@ impl Bloom {
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, queue: &wgpu::Queue) {
+        encoder.push_debug_group("Bloom");
         //Downsampling
         for i in 0..(MIP_LEVELS-1) {
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -286,18 +292,15 @@ impl Bloom {
                 timestamp_writes: None
             });
 
+            render_pass.push_debug_group(&format!("Downsample {} -> {}",i,i+1));
             render_pass.set_pipeline(&self.downsample_pipeline);
             render_pass.set_bind_group(0, &self.sampling_bindgroups[i], &[]);
-            render_pass.draw(0..6, 0..1);   
-            
-            /*
-                Either find a way to do downsampling / upsampling with a new render pass for each mip-level, because otherwise all the bindgroup optimization doesnt matter. Possible solution is to use compute shaders, but in that case output goes through UAV, which might be slightly slower than a fragment shader, not sure. Also would have to bind output textures. If we stick with the multiple render pass solution, then no point in binding the whole mipchain each time, only bind needed input level.
-            */
+            render_pass.draw(0..6, 0..1);  
+            render_pass.pop_debug_group(); 
         }
 
         //Upsampling
-        let filter_size = 1.0f32;
-        let buffer_data_bytes = [filter_size.to_be_bytes()].concat();
+        let buffer_data_bytes = [self.filter_size.to_le_bytes()].concat();
         queue.write_buffer(&self.upsample_settings, 0, &buffer_data_bytes);
         for i in (1..MIP_LEVELS).rev() {
             // Update Settings Buffer, Update Render Target, Create Render Pass, Draw
@@ -316,11 +319,14 @@ impl Bloom {
                 timestamp_writes: None
             });
 
+            render_pass.push_debug_group(&format!("Upsample {} -> {}", i, i - 1));
             render_pass.set_pipeline(&self.upsample_pipeline);
             render_pass.set_bind_group(0, &self.sampling_bindgroups[i], &[]);
             render_pass.set_bind_group(1, &self.upsample_settings_bindgroup, &[]);
             render_pass.draw(0..6, 0..1);   
+            render_pass.pop_debug_group();
         }
         //At this point bloom output is in miplevel 0 
+        encoder.pop_debug_group();
     }
 }

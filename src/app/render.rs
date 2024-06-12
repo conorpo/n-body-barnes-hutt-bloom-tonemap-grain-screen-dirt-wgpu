@@ -93,10 +93,12 @@ impl Renderer {
     }
 
     pub fn render<'rpass>(&'rpass self, rpass: &mut wgpu::RenderPass<'rpass>, galaxy: &'rpass Galaxy) {
+        rpass.push_debug_group("Main Render Pass");
         rpass.set_pipeline(&self.render_pipeline);
         rpass.set_bind_group(0, &self.bindgroup, &[]);
         rpass.set_vertex_buffer(0, galaxy.stars_buffer.slice(..));
         rpass.draw(0..galaxy.stars.len() as u32, 0..1);
+        rpass.pop_debug_group();
     }
 }
 
