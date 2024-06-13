@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::wgpu_state::{self, WgpuState};
 use crate::ui::UI;
 
-mod galaxy;
+pub mod galaxy;
 use galaxy::Galaxy;
 
 mod render;
@@ -31,6 +31,8 @@ use timestamps::Timestamps;
 
 
 pub struct AppState<'window> {
+    config: Config,
+
     pub wgpu_state: WgpuState<'window>,
     pub galaxy: Galaxy,
     pub renderer: Renderer,
@@ -49,17 +51,17 @@ pub struct AppState<'window> {
 
 impl<'window> AppState<'window> {
     
-    pub fn new(wgpu_state: WgpuState<'window>, config: &Config, size: &PhysicalSize<u32>) -> Self {
+    pub fn new(wgpu_state: WgpuState<'window>, config: Config, size: &PhysicalSize<u32>) -> Self {
         // Simulation
-        let galaxy = Galaxy::new(&wgpu_state.device, config);
+        let galaxy = Galaxy::new(&wgpu_state.device, &config);
 
         // Primary Rendering
-        let camera = Camera::<PerspectiveProjection>::new(&wgpu_state.device, config);
-        let renderer = Renderer::new(&wgpu_state.device, config, wgpu_state.config.format, &camera);
+        let camera = Camera::<PerspectiveProjection>::new(&wgpu_state.device, &config);
+        let renderer = Renderer::new(&wgpu_state.device, &config, wgpu_state.config.format, &camera);
 
         // Post-Porcessing
-        let bloom = Bloom::new(&wgpu_state.device, config, wgpu_state.config.format, size);
-        let present = Present::new(&wgpu_state.device, config, wgpu_state.config.format, size, &bloom.mipchain_views[0]);
+        let bloom = Bloom::new(&wgpu_state.device, &config, wgpu_state.config.format, size);
+        let present = Present::new(&wgpu_state.device, &config, wgpu_state.config.format, size, &bloom.mipchain_views[0]);
 
         let ui = UI::new(&wgpu_state.device, wgpu_state.config.format, &wgpu_state.window);
         let timestamps = Timestamps::new(&wgpu_state.device);
@@ -73,10 +75,12 @@ impl<'window> AppState<'window> {
             present,
             ui,
             timestamps,
+            config
         }
     }   
 
-    pub fn update(&self) {
+    pub fn update(&mut self) {
+        self.galaxy.add_stars(&self.config, &self.wgpu_state.queue, 200);
         self.camera.update(&self.wgpu_state.queue);
     }
 
@@ -140,7 +144,7 @@ impl<'window> AppState<'window> {
         }
 
         //UI (maybe figure out some abtraction instead of passing all used structs, maybe just pass the specific parameters)
-        let ui_output = self.ui.update(&self.wgpu_state, &mut self.camera, &mut self.bloom, & self.timestamps.last_frame_times);
+        let ui_output = self.ui.update(&self.wgpu_state, &mut self.camera, &mut self.bloom, &self.timestamps, &self.galaxy);
 
         let size: [u32;2] = self.wgpu_state.window.inner_size().into();
         let screen_descriptor = ScreenDescriptor {
@@ -151,7 +155,7 @@ impl<'window> AppState<'window> {
 
         
         //Profiling
-        self.timestamps.resolve(&mut encoder);
+        self.timestamps.resolve(&mut encoder, &self.wgpu_state.device);
 
         self.wgpu_state.queue.submit(std::iter::once(encoder.finish()));
         output.present();

@@ -69,7 +69,7 @@ async fn run() -> Result<(), winit::error::EventLoopError> {
     }
 
     // Setups the entire rest of the application
-    let mut app = app::AppState::new(wgpu_state, &config, &size);
+    let mut app = app::AppState::new(wgpu_state, config, &size);
 
     event_loop.set_control_flow(ControlFlow::Poll);
 

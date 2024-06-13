@@ -1,8 +1,9 @@
 use egui_wgpu::*;
+use toml::value::Time;
 use wgpu::{CommandEncoder, Device, RenderPassColorAttachment, TextureFormat, TextureView};
 
 use egui::epaint::Shadow;
-use egui::{Align2, Context, FullOutput, Visuals};
+use egui::{Align2, Context, FullOutput, Galley, Visuals};
 
 use egui_winit::{update_viewport_info, State};
 use winit::event::WindowEvent;
@@ -11,6 +12,7 @@ use crate::app::AppState;
 use crate::wgpu_state::{self, WgpuState};
 
 use crate::app::camera::*;
+use crate::app::galaxy::Galaxy;
 use crate::app::post_processing::bloom::*;
 use crate::app::timestamps::Timestamps;
 
@@ -47,15 +49,20 @@ impl UI {
         }
     } 
 
-    pub fn update(&mut self, wgpu_state: &WgpuState, camera: &mut Camera<PerspectiveProjection>, bloom: &mut Bloom, timestamps: &Vec<u64>) -> FullOutput {
+    pub fn update(&mut self, wgpu_state: &WgpuState, camera: &mut Camera<PerspectiveProjection>, bloom: &mut Bloom, timestamps: &Timestamps, galaxy: &Galaxy) -> FullOutput {
         let raw_input = self.state.take_egui_input(wgpu_state.window);
-        
+        let timestamps = timestamps.last_frame_times.lock().unwrap();
+
         self.context.run(raw_input, |ui| {
             egui::SidePanel::right("Controls")
             .default_width(1000.0)
             .resizable(true)
             .show(&ui, |mut ui| {
                 ui.heading("n-body-barnes-hutt");
+                ui.group(|ui| {
+                    ui.label("Galaxy");
+                    ui.label(format!("{} stars",galaxy.stars.len()));
+                });
                 ui.group(|ui| {
                     ui.label("Camera");
                     ui.add(egui::Slider::new(&mut camera.spherical_position.r, 5.0..=5000.0).text("Zoom Level"));
